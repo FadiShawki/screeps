@@ -1,0 +1,13 @@
+{
+  "name": "@orbitmines/screeps",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/screeps": "^3.4.0",
+    "@types/lodash": "4.17.24"
+  }
+}
