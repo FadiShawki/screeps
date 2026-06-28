@@ -12,7 +12,7 @@ const REMOTE_SOURCE_RANGE = 45;
 
 // How many times the raw production rate the haulers should be able to move before we stop spawning more.
 // Higher = more transporters (the nominal per-hauler throughput is never fully realized in practice).
-const TRANSPORTER_HEADROOM = 50;
+const TRANSPORTER_HEADROOM = 5;
 
 const ROAD_FILL_RADIUS = 5;
 
@@ -62,6 +62,8 @@ export function loop() {
     else if (creep.body.some(x => x.type === ATTACK)) new Unit.Infantry(creep).loop();
     else console.error(`Unknown creep type with ${creep.body.map(x => x.type).join(', ')}`)
   }
+
+  Unit.Settler.paintTarget();
 }
 
 namespace Goal {
@@ -116,7 +118,7 @@ namespace Unit {
       // Stuck detection: if we didn't move since our last travel call, a creep is parked on our cached path.
       // Force a fresh path this tick (reusePath 0) so moveTo routes around it instead of waiting it out.
       const here = `${this.self.pos.roomName}:${this.self.pos.x}:${this.self.pos.y}`;
-      const reusePath = 1;//this.self.memory._stuck === here ? 0 : 10;
+      const reusePath = this.self.memory._stuck === here ? 0 : 20; // repath only when genuinely blocked; otherwise reuse
       this.self.memory._stuck = here;
 
       opts = { swampCost: 10, plainCost: 2, reusePath, ...opts }
@@ -134,6 +136,7 @@ namespace Unit {
 
   }
   export class Worker extends Obj {
+    static count() { return Object.values(Game.creeps).filter(x => x.body.some(p => p.type === WORK) && x.body.filter(p => p.type === CARRY).length < 2).length; }
     static configuration: Configuration = [[CARRY], [MOVE, WORK]]
 
     get carrying(): ResourceConstant | undefined {
@@ -284,7 +287,17 @@ namespace Unit {
       if (controller && this.may_upgrade() && (!fill || Math.random() < UPGRADE_DEDICATION)) return controller;
       return fill ?? controller;
     }
-    fillable(): StructureSpawn | StructureTower | StructureExtension | StructureContainer | null { return this.pos.closestFillable(); }
+    fillable(): StructureSpawn | StructureTower | StructureExtension | StructureContainer | null {
+      // Closest fillable by REAL in-room path. closestByRoute runs a terrain-only PathFinder that walks straight
+      // through buildings, so it can rank a far container ahead of a near sink. findClosestByPath respects them.
+      const candidates = this.self.room.find(FIND_STRUCTURES, {
+        filter: s => (
+          s.structureType === STRUCTURE_CONTAINER ||
+          (([STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER] as string[]).includes(s.structureType) && (s as OwnedStructure).my)
+        ) && (((s as any).store?.getFreeCapacity(RESOURCE_ENERGY) ?? 0) > 0),
+      }) as (StructureSpawn | StructureExtension | StructureTower | StructureContainer)[];
+      return this.self.pos.findClosestByPath(candidates, { ignoreCreeps: true }) ?? this.pos.closestFillable();
+    }
     may_upgrade(): boolean { return Transporter.count() === 0; }
 
     deliver(): void {
@@ -301,8 +314,14 @@ namespace Unit {
         : target instanceof StructureController ? this.self.upgradeController(target)
         : this.self.transfer(target, this.carrying);
 
-      if (code === ERR_NOT_IN_RANGE) this.travel(target, { visualizePathStyle: { stroke: target instanceof ConstructionSite ? '#0000FF' : target instanceof StructureController ? '#00FF00' : '#ffffff' } });
-      else if (code !== OK) this.self.memory.deliver_target = undefined; // full / can't deliver here (e.g. no WORK) → re-pick next tick
+      if (code === ERR_NOT_IN_RANGE) return void this.travel(target, { visualizePathStyle: { stroke: target instanceof ConstructionSite ? '#0000FF' : target instanceof StructureController ? '#00FF00' : '#ffffff' } });
+      if (code !== OK) this.self.memory.deliver_target = undefined; // full / can't deliver here (e.g. no WORK) → re-pick next tick
+
+      // In range and carrying energy → top up the structure we're feeding if it's worn. This is how a source
+      // container gets maintained: the worker delivering into it is the one standing there with energy to spare.
+      // (transfer is a separate intent from the repair work-action, so it costs no extra tick.)
+      if (target instanceof Structure && target.hits < target.hitsMax
+        && target.structureType !== STRUCTURE_WALL && target.structureType !== STRUCTURE_RAMPART) this.self.repair(target);
     }
 
   }
@@ -324,12 +343,29 @@ namespace Unit {
       return [drop_move(base), drop_move(repeated)];
     }
 
+    loop(): void { this.maintain(); this.gather(); }
+
+    // Default behaviour: as we pass, top up the worst-off broken structure within work range — one work-action,
+    // a separate intent from MOVE so it's free during the haul. Barriers only up to the defensive target.
+    maintain(): void {
+      if ((this.self.store[RESOURCE_ENERGY] ?? 0) === 0) return; // need a bit of our load to repair with
+      const damaged = this.self.pos.findInRange(FIND_STRUCTURES, 3, {
+        filter: s => s.hits < s.hitsMax && s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART, // barriers are the tower's job
+      });
+      if (!damaged.length) return;
+      const worst = damaged.reduce((a, b) => b.hits / b.hitsMax < a.hits / a.hitsMax ? b : a); // worst-off first
+      this.self.repair(worst);
+    }
+
     gather(): void {
       // Latch into deliver mode when full and stay there until empty — drop off the whole load before collecting
       // again (a sink filling up mid-delivery must not send us back to the source half-loaded).
       if (this.self.store.getUsedCapacity() === 0) this.self.memory.delivering = false;
       else if (this.self.store.getFreeCapacity() === 0) this.self.memory.delivering = true;
       if (this.self.memory.delivering) return this.deliver();
+
+      // Dedicated remote hauler → only ever shuttle our claimed remote source's drops home.
+      if (this.self.memory.target) return this.gather_remote();
 
       // Stick to a chosen pickup until it's drained (or gone), instead of chasing the closest collectable each tick.
       let source: Structure | Resource | null = this.self.memory.collect_target ? Game.getObjectById(this.self.memory.collect_target) : null;
@@ -340,21 +376,52 @@ namespace Unit {
       }
       if (!source) {
         if (this.self.store.getUsedCapacity() > 0) return this.deliver();   // hold a load → go deliver it
-        const remote = this.remote_pickup_pos();                            // nothing local → head out to a remote source's drops
-        if (remote) return void this.travel(remote, { visualizePathStyle: { stroke: '#ffaa00' } });
+        if (this.claim_remote()) return this.gather_remote();               // no local work → dedicate to a remote source
         return this.idle();
       }
       const code = source instanceof Resource ? this.self.pickup(source) : this.self.withdraw(source, RESOURCE_ENERGY);
       if (code === ERR_NOT_IN_RANGE) this.travel(source, { visualizePathStyle: { stroke: '#ffaa00' } });
     }
 
-    // The nearest remote source (cached or visible) — where remote miners drop energy for us to shuttle home.
-    remote_pickup_pos(): RoomPosition | undefined {
-      const sources = [
-        ..._Room_.REMOTE.flatMap(r => r.sources as any[]),
-        ..._Room_.ALL.filter(r => !r.my_controller).flatMap(r => r.sources as any[]),
-      ];
-      return this.pos.closestByRoute(sources.map(s => ({ pos: roomPosOf(s.self.pos) })))?.pos;
+    // Shuttle our claimed remote source: head out, collect the miner's drops, then (full) deliver home.
+    gather_remote(): void {
+      const pos = this.remote_target_pos();
+      if (!pos) { this.self.memory.target = undefined; return this.gather(); } // source gone → release and go local
+      if (this.self.room.name === pos.roomName) {
+        const drop = this.pos.closestCollectable();
+        if (drop) {
+          const code = drop instanceof Resource ? this.self.pickup(drop) : this.self.withdraw(drop, RESOURCE_ENERGY);
+          if (code === ERR_NOT_IN_RANGE) this.travel(drop, { visualizePathStyle: { stroke: '#ffaa00' } });
+          return;
+        }
+        // Nothing dropped: wait if a miner is still working it, otherwise the source is abandoned → release.
+        if (!Object.values(Game.creeps).some(c => c.memory.target === this.self.memory.target && c.body.some(p => p.type === WORK) && c.body.filter(p => p.type === CARRY).length < 2)) {
+          this.self.memory.target = undefined;
+          return this.gather();
+        }
+        return void this.travel(pos, { visualizePathStyle: { stroke: '#ffaa00' } });
+      }
+      this.travel(pos, { visualizePathStyle: { stroke: '#ffaa00' } });               // head to the remote room
+    }
+
+    remote_target_pos(): RoomPosition | undefined {
+      const live = Game.getObjectById(this.self.memory.target as Id<Source>);
+      if (live instanceof Source) return live.pos;
+      const cached = _Room_.find_remote_source(this.self.memory.target as Id<Source>);
+      return cached ? roomPosOf((cached as any).self.pos) : undefined;
+    }
+
+    // Claim a remote source that's being mined (so drops are coming) but has no transporter dedicated to it yet.
+    claim_remote(): boolean {
+      const isT = (c: Creep) => c.body.filter(p => p.type === CARRY).length >= 2;
+      const hauled = new Set(Object.values(Game.creeps).filter(isT).map(c => c.memory.target).filter(Boolean));
+      const mined = new Set(Object.values(Game.creeps).filter(c => !isT(c) && c.body.some(p => p.type === WORK)).map(c => c.memory.target).filter(Boolean));
+      const sources = [..._Room_.REMOTE.flatMap(r => r.sources as any[]), ..._Room_.ALL.filter(r => !r.my_controller).flatMap(r => r.sources as any[])]
+        .filter(s => mined.has(s.self.id) && !hauled.has(s.self.id));
+      const best = this.pos.closestByRoute(sources.map(s => ({ id: s.self.id as Id<Source>, pos: roomPosOf(s.self.pos) })));
+      if (!best) return false;
+      this.self.memory.target = best.id;
+      return true;
     }
 
     // Haul into sinks (overflow to storage). When every sink is full, never idle a load — build the current
@@ -417,6 +484,105 @@ namespace Unit {
     }
   }
   export class Settler extends Obj {
+    static canSettle() { return _Room_.ALL.filter(x => x.my_controller).length >= Game.gcl.level; }
+    static roomScore(d: _Room_ | Serialized<_Room_>) { return d.sources.length; } //TODO Empty spaces next too.
+
+    // Best unowned, claimable, scouted room — or undefined if GCL is maxed / nothing worth it.
+    static freeSettleTarget(): _Room_ | Serialized<_Room_> | undefined {
+      let best: _Room_ | Serialized<_Room_> | undefined, bestScore = 0;
+
+      for (const room of _Room_.NON_OWNED) {
+        if (!room.self.controller || room.self.controller.owner || room.self.controller.reservation) continue;
+        if (room.status === 'closed') continue;
+        const s = Settler.roomScore(room);
+        if (s > bestScore) { bestScore = s; best = room; }
+      }
+      return best;
+    }
+
+    static bestSpawnPos(room: _Room_ | Serialized<_Room_>): RoomPosition | undefined {
+      const name = room.self.name;
+      const controller = room.self.controller;
+      const terrain = Game.map.getRoomTerrain(name);
+      const wall = (x: number, y: number) => terrain.get(x, y) & TERRAIN_MASK_WALL;
+
+      // Terrain-aware move distance from a point to every walkable tile (8-directional BFS, walls impassable). -1 = unreachable.
+      const distanceFrom = (sx: number, sy: number): Int16Array => {
+        const dist = new Int16Array(ROOM_SIZE * ROOM_SIZE).fill(-1);
+        const q: number[] = [sx * ROOM_SIZE + sy];
+        dist[sx * ROOM_SIZE + sy] = 0;
+        for (let i = 0; i < q.length; i++) {
+          const cur = q[i], cx = (cur / ROOM_SIZE) | 0, cy = cur % ROOM_SIZE, d = dist[cur] + 1;
+          for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+            if (!dx && !dy) continue;
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || nx >= ROOM_SIZE || ny < 0 || ny >= ROOM_SIZE) continue;
+            const ni = nx * ROOM_SIZE + ny;
+            if (dist[ni] !== -1 || wall(nx, ny)) continue;
+            dist[ni] = d; q.push(ni);
+          }
+        }
+        return dist;
+      };
+
+      // Mining capacity of a source = open (non-wall) tiles a miner can stand on around it. More slots → more miners →
+      // more energy → more haul/spawn traffic, so we pull the spawn harder toward higher-capacity sources.
+      const freeSlots = (sx: number, sy: number): number => {
+        let n = 0;
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+          if (!dx && !dy) continue;
+          const nx = sx + dx, ny = sy + dy;
+          if (nx >= 0 && nx < ROOM_SIZE && ny >= 0 && ny < ROOM_SIZE && !wall(nx, ny)) n++;
+        }
+        return n;
+      };
+
+      // Only sources that can actually be mined (≥1 open slot) influence placement.
+      const sources = room.sources
+        .map(s => ({ x: s.pos.x, y: s.pos.y, slots: freeSlots(s.pos.x, s.pos.y) }))
+        .filter(s => s.slots > 0);
+      if (!sources.length) return undefined;
+
+      const fields = sources.map(s => distanceFrom(s.x, s.y));
+      const controllerField = controller ? distanceFrom(controller.pos.x, controller.pos.y) : undefined;
+      const CONTROLLER_WEIGHT = 0.5; // how many "source-slots worth" the controller proximity counts for
+
+      let best: RoomPosition | undefined, bestScore = Infinity;
+      for (let x = 1; x < ROOM_SIZE - 1; x++) for (let y = 1; y < ROOM_SIZE - 1; y++) {
+        if (wall(x, y)) continue;
+        const i = x * ROOM_SIZE + y;
+        if (fields.some(f => f[i] < 2)) continue;                 // unreachable (-1) or jammed against a source
+        if (controllerField && controllerField[i] < 0) continue;  // must be reachable from the controller too
+
+        // Squared distances → penalise being far from ANY target (so we land on a balanced middle, not an extreme),
+        // each source weighted by its mining-slot count, plus the controller at CONTROLLER_WEIGHT.
+        let total = 0, weight = 0;
+        for (let k = 0; k < fields.length; k++) {
+          total += fields[k][i] * fields[k][i] * sources[k].slots;
+          weight += sources[k].slots;
+        }
+        if (controllerField) { total += controllerField[i] * controllerField[i] * CONTROLLER_WEIGHT; weight += CONTROLLER_WEIGHT; }
+
+        const score = total / weight;
+        if (score < bestScore) { bestScore = score; best = new RoomPosition(x, y, name); }
+      }
+      return best;
+    }
+
+    static paintTarget() {
+      const target = Settler.freeSettleTarget();
+      if (!target) return;
+
+
+      _Room_.NON_OWNED.forEach(target => {
+        const spawn = Settler.bestSpawnPos(target);
+        if (!spawn) return;
+
+        new RoomVisual(spawn.roomName).circle(spawn.x, spawn.y, {fill: '#CC00CC', stroke: '#ffffff', radius: 0.5});
+      })
+
+    }
+
     // TODO Dont move into the room if there's a tower still.
     static configuration: Configuration = [[MOVE, CLAIM], [MOVE, CLAIM]]
     
@@ -424,6 +590,8 @@ namespace Unit {
       
     }
   }
+
+  // TODO Under attack, the first parts to take hits are those specified first.
   export class Tank extends Obj {
     static configuration: Configuration = [[MOVE, ATTACK], [MOVE, MOVE, ATTACK, TOUGH]]
     
@@ -536,6 +704,7 @@ class _Room_ {
 
   static ALL: _Room_[] = []
   static REMOTE: Serialized<_Room_>[] = []
+  static get NON_OWNED(): (_Room_ | Serialized<_Room_>)[] { return [...this.ALL.filter(x => !x.my_controller), ..._Room_.REMOTE] } 
 
   static remote_loop(room: Serialized<_Room_> & { timestamp: number }) {
     if (Game.time - room.timestamp >= ROOM_CACHE_LIFETIME) {
@@ -700,7 +869,6 @@ class _Room_ {
   ); }
 
   loop(): void {
-    console.log(this.needsTransporter())
     const towers = this.self.find(FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_TOWER }).map(x => new Structures.Tower(x));
     for (const tower of towers) { tower.loop(); }
   
@@ -709,13 +877,13 @@ class _Room_ {
 
   save_cache(): void {
     if (this.my_controller) return; // Don't cache if we'll certainly get an next tick.
+    const cached = Memory.rooms[this.self.name];
+    if (cached && Game.time - cached.timestamp < 10) return; // refresh at most every 10 ticks (positions don't move)
     this.self.memory = serialize(this);
     this.self.memory.timestamp = Game.time;
   }
 
-  bestAffordableUnit(configuration: Unit.Configuration) {
-    const budget = this.self.energyCapacityAvailable;
-    
+  bestAffordableUnit(configuration: Unit.Configuration, budget = this.self.energyCapacityAvailable) {
     const base = configuration[0]; const repeated = configuration[1];
     const baseCost = Unit.cost(base), repeatedCost = Unit.cost(repeated);
     const maxUnits = repeated.length === 0 ? 0 : Math.floor((MAX_CREEP_SIZE - base.length) / repeated.length);
@@ -744,18 +912,8 @@ class _Room_ {
       + spawn.close_remote_sources().reduce((sum, s) => sum + (s as any).self.energyCapacity, 0);
     if (production === 0) return false;
 
-    // How much the current transporters haul each regen cycle (revenue derated by their travel).
-    let hauledPerCycle = 0;
-    for (const t of this.transporters) {
-      if (t.trip_downtime === Infinity) continue;
-      hauledPerCycle += t.revenue / CREEP_LIFE_TIME * ENERGY_REGEN_TIME;
-    }
-    // Lenient: provision well above the raw production rate (haul trips, congestion and regen gaps mean nominal
-    // capacity is never fully realized), so keep spawning until the haulers can move several times the deposit.
-    if (hauledPerCycle >= production * TRANSPORTER_HEADROOM) return false;
-
-    // And don't gate on a new one fully repaying its build cost — any positive throughput is worth it. (A zero here
-    // means there's nothing on the ground to haul right now, which still correctly stops us from over-spawning.)
+    // One representative hauler's per-cycle throughput (a single trip estimate = a few PathFinder calls) times how
+    // many we have — instead of summing every transporter's own trip (that was O(transporters) PathFinder per tick).
     const body = this.bestAffordableUnit(Unit.Transporter.roaded_configuration(this));
     const candidate = new Unit.Transporter({
       body: body.map(type => ({ type, hits: 100 })),
@@ -764,7 +922,13 @@ class _Room_ {
       room: this.self,
     } as unknown as Creep);
 
-    return candidate.revenue > 0;
+    const trip = candidate.trip_downtime;
+    if (trip === Infinity) return false; // nothing on the ground to haul right now → don't over-spawn
+    const perHauler = candidate.load / (candidate.load_time + trip) * ENERGY_REGEN_TIME;
+    const count = this.self.find(FIND_MY_CREEPS).filter(c => c.body.filter(p => p.type === CARRY).length >= 2).length;
+    // Lenient headroom: provision well above the raw production rate (trips, congestion and regen gaps mean nominal
+    // capacity is never realized), so keep spawning until the fleet can move several times the deposit per cycle.
+    return count * perHauler < production * TRANSPORTER_HEADROOM;
   }
   get transporters() {
     return this.self.find(FIND_MY_CREEPS).filter(x => x.body.filter(p => p.type === CARRY).length >= 2).map(x => new Unit.Transporter(x));
@@ -774,7 +938,7 @@ class _Room_ {
     return memo('needsWorker:' + this.self.name, () => {
       const sources = [
         ...this.sources.filter(x => x.needsWorker()),
-        ...this.spawners.flatMap(x => x.close_remote_sources()).filter(x => x instanceof _Source_ ? x.needsWorker() : !Object.values(Game.creeps).some(c => c.memory.target === (x as any).self.id))
+        ...this.spawners.flatMap(x => x.close_remote_sources()).filter(x => x instanceof _Source_ ? x.needsWorker() : !Object.values(Game.creeps).some(c => c.memory.target === (x as any).self.id && c.body.some(p => p.type === WORK) && c.body.filter(p => p.type === CARRY).length < 2))
       ]
       return sources.length === 0 ? false : sources;
     });
@@ -802,17 +966,8 @@ class _Source_ {
   }
 
   needsWorker(): boolean {
-    let drainedPerCycle = 0;
-    let spacesUsed = 0;
-    for (const w of this.workers) {
-      if (w.trip_downtime === Infinity) continue;
-
-      drainedPerCycle += w.revenue / CREEP_LIFE_TIME * ENERGY_REGEN_TIME;
-      spacesUsed += w.load_time / (w.load_time + w.trip_downtime);
-    }
-
-    if (drainedPerCycle >= this.self.energyCapacity) return false;
-
+    // One representative worker's trip estimate (a single PathFinder) times how many are assigned here — instead of
+    // computing every assigned worker's own trip (that was O(workers) PathFinder per source per tick).
     const body = this.room.bestAffordableUnit(Unit.Worker.configuration);
     const candidate = new Unit.Worker({
       body: body.map(type => ({ type, hits: 100 })),
@@ -821,10 +976,17 @@ class _Source_ {
       room: this.self.room,
     } as unknown as Creep);
 
-    if (candidate.revenue <= 0) return false;
+    const trip = candidate.trip_downtime;
+    if (trip === Infinity) return false;
+    const revenue = CREEP_LIFE_TIME / (candidate.load_time + trip) * candidate.load;
+    if (revenue <= 0) return false;
 
+    const n = Object.values(Game.creeps).filter(c => c.memory.target === this.self.id).length;
+    if (n * revenue / CREEP_LIFE_TIME * ENERGY_REGEN_TIME >= this.self.energyCapacity) return false;
+
+    const spacesUsed = n * candidate.load_time / (candidate.load_time + trip);
     const freeBySpace = Math.max(0, 1 - spacesUsed / this.pos.adjacentSpaces());
-    return candidate.revenue * freeBySpace > Unit.cost(body);
+    return revenue * freeBySpace > Unit.cost(body);
   }
 
   get workers() {
@@ -973,6 +1135,19 @@ namespace Structures {
 
     loop(): void {
       // TODO IF IN WAR
+      if (this.self.spawning) return; // busy → skip all the spawn-decision work (needsWorker/needsTransporter/road scans)
+
+      // Emergency: no worker mining THIS room (remote miners don't refill our spawn) → the local economy is dead and
+      // the spawn won't refill on its own, so spawn the best worker we can afford with the energy on hand *now*.
+      const localSources = new Set(this.room.sources.map(s => s.self.id));
+      const localWorkers = Object.values(Game.creeps).filter(c =>
+        c.body.some(p => p.type === WORK) && c.body.filter(p => p.type === CARRY).length < 2 && localSources.has(c.memory.target as Id<Source>)).length;
+      if (localWorkers === 0) {
+        const body = this.room.bestAffordableUnit(Unit.Worker.configuration, this.self.room.energyAvailable);
+        if (body.includes(WORK)) this.spawnCreep(body); // else not enough yet → wait, don't spawn a useless CARRY-only creep
+        return;
+      }
+
       if (this.room.needsWorker()) this.spawnCreep(this.room.bestAffordableUnit(Unit.Worker.configuration));
       else if (this.room.needsTransporter()) this.spawnCreep(this.room.bestAffordableUnit(Unit.Transporter.roaded_configuration(this.room)));
       else if (Unit.Scout.count() === 0) this.spawnCreep(this.room.bestAffordableUnit(Unit.Scout.configuration));
