@@ -1,0 +1,1609 @@
+{
+    "self": {
+        "name": "sim",
+        "energyAvailable": 165,
+        "energyCapacityAvailable": 300,
+        "survivalInfo": {
+            "mode": "survival",
+            "status": "active",
+            "user": "6a3bdc8ac1ca830013fe704c",
+            "score": 0,
+            "timeToWave": 200,
+            "wave": 1,
+            "survivalEnabled": true,
+            "invaders": {
+                "bodies": []
+            }
+        },
+        "visual": {
+            "roomName": "sim"
+        },
+        "controller": {
+            "id": "94f876d8c4cf851bf7fea2f5",
+            "pos": {
+                "x": 22,
+                "y": 15,
+                "roomName": "sim"
+            },
+            "ticksToDowngrade": 18585,
+            "level": 1,
+            "progress": 0,
+            "progressTotal": 200,
+            "safeModeAvailable": 0,
+            "isPowerEnabled": false,
+            "owner": {
+                "username": "Fadi"
+            },
+            "my": true,
+            "structureType": "controller"
+        },
+        "memory": {}
+    },
+    "spawners": [
+        {
+            "self": {
+                "id": "d58c5e0141cb53748baca1f5",
+                "pos": {
+                    "x": 25,
+                    "y": 25,
+                    "roomName": "sim"
+                },
+                "name": "Spawn1",
+                "energy": 165,
+                "energyCapacity": 300,
+                "spawning": null,
+                "store": {
+                    "energy": 165
+                },
+                "memory": {},
+                "owner": {
+                    "username": "Fadi"
+                },
+                "my": true,
+                "hits": 5000,
+                "hitsMax": 5000,
+                "structureType": "spawn"
+            },
+            "road_to_controller": {
+                "name": "d58c5e0141cb53748baca1f5.road_to_controller",
+                "tiles": [
+                    {
+                        "x": 24,
+                        "y": 24,
+                        "road_state": "todo"
+                    },
+                    {
+                        "x": 23,
+                        "y": 23,
+                        "road_state": "todo"
+                    },
+                    {
+                        "x": 23,
+                        "y": 22,
+                        "road_state": "todo"
+                    },
+                    {
+                        "x": 23,
+                        "y": 21,
+                        "road_state": "todo"
+                    },
+                    {
+                        "x": 23,
+                        "y": 20,
+                        "road_state": "todo"
+                    },
+                    {
+                        "x": 23,
+                        "y": 19,
+                        "road_state": "todo"
+                    },
+                    {
+                        "x": 23,
+                        "y": 18,
+                        "road_state": "todo"
+                    },
+                    {
+                        "x": 23,
+                        "y": 17,
+                        "road_state": "todo"
+                    }
+                ]
+            },
+            "road_to_extensions": {
+                "name": "d58c5e0141cb53748baca1f5.road_to_extensions",
+                "tiles": []
+            },
+            "road_to_exits": []
+        }
+    ],
+    "sources": [
+        {
+            "self": {
+                "pos": {
+                    "x": 35,
+                    "y": 20,
+                    "roomName": "sim"
+                },
+                "id": "51cb941e25a7d553836749c8",
+                "energy": 2156,
+                "energyCapacity": 3000,
+                "ticksToRegeneration": 103
+            },
+            "pos": {
+                "self": {
+                    "pos": {
+                        "x": 35,
+                        "y": 20,
+                        "roomName": "sim"
+                    },
+                    "id": "51cb941e25a7d553836749c8",
+                    "energy": 2156,
+                    "energyCapacity": 3000,
+                    "ticksToRegeneration": 103
+                },
+                "x": 35,
+                "y": 20,
+                "road_state": "skip"
+            },
+            "max_containers": 2,
+            "workers": [
+                {
+                    "self": {
+                        "id": "9bf4df05342150c4214cb434",
+                        "name": "Creep1",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 93,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1744.1860465116279,
+                    "lifetime_trips": 34.883720930232556,
+                    "trip_downtime": 18,
+                    "downtime": 627.9069767441861,
+                    "pos": {
+                        "x": 34,
+                        "y": 21,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "a1c423a5212da44144d0d1fb",
+                        "name": "Creep60",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 152,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 2419.3548387096776,
+                    "lifetime_trips": 48.38709677419355,
+                    "trip_downtime": 6,
+                    "downtime": 290.32258064516134,
+                    "pos": {
+                        "x": 28,
+                        "y": 27,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "1d0765a36d280849216a974a",
+                        "name": "Creep151",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 243,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1744.1860465116279,
+                    "lifetime_trips": 34.883720930232556,
+                    "trip_downtime": 18,
+                    "downtime": 627.9069767441861,
+                    "pos": {
+                        "x": 34,
+                        "y": 20,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "84a926e3a4dc85bd41b1b9f0",
+                        "name": "Creep207",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 299,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 2142.8571428571427,
+                    "lifetime_trips": 42.857142857142854,
+                    "trip_downtime": 10,
+                    "downtime": 428.57142857142856,
+                    "pos": {
+                        "x": 30,
+                        "y": 28,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "a83c4b99143fb471909b04c2",
+                        "name": "Creep301",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 393,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1666.6666666666667,
+                    "lifetime_trips": 33.333333333333336,
+                    "trip_downtime": 20,
+                    "downtime": 666.6666666666667,
+                    "pos": {
+                        "x": 35,
+                        "y": 21,
+                        "road_state": "todo"
+                    }
+                }
+            ]
+        },
+        {
+            "self": {
+                "pos": {
+                    "x": 43,
+                    "y": 44,
+                    "roomName": "sim"
+                },
+                "id": "70d7540eff11b3df720da0de",
+                "energy": 2676,
+                "energyCapacity": 3000,
+                "ticksToRegeneration": 184
+            },
+            "pos": {
+                "self": {
+                    "pos": {
+                        "x": 43,
+                        "y": 44,
+                        "roomName": "sim"
+                    },
+                    "id": "70d7540eff11b3df720da0de",
+                    "energy": 2676,
+                    "energyCapacity": 3000,
+                    "ticksToRegeneration": 184
+                },
+                "x": 43,
+                "y": 44,
+                "road_state": "skip"
+            },
+            "max_containers": 2,
+            "workers": [
+                {
+                    "self": {
+                        "id": "ac60ac340b3a218309a95c7f",
+                        "name": "Creep364",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 456,
+                        "carryCapacity": 50,
+                        "fatigue": 14,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1229.5081967213114,
+                    "lifetime_trips": 24.59016393442623,
+                    "trip_downtime": 36,
+                    "downtime": 885.2459016393443,
+                    "pos": {
+                        "x": 40,
+                        "y": 43,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "dc77e625285e0ae6b42c1792",
+                        "name": "Creep445",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 537,
+                        "carryCapacity": 50,
+                        "fatigue": 2,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1363.6363636363637,
+                    "lifetime_trips": 27.272727272727273,
+                    "trip_downtime": 30,
+                    "downtime": 818.1818181818182,
+                    "pos": {
+                        "x": 40,
+                        "y": 39,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "9787d72659edd8887725d7e9",
+                        "name": "Creep468",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 560,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1190.4761904761906,
+                    "lifetime_trips": 23.80952380952381,
+                    "trip_downtime": 38,
+                    "downtime": 904.7619047619048,
+                    "pos": {
+                        "x": 42,
+                        "y": 43,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "9a7a7115401c20330113f081",
+                        "name": "Creep515",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 607,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1190.4761904761906,
+                    "lifetime_trips": 23.80952380952381,
+                    "trip_downtime": 38,
+                    "downtime": 904.7619047619048,
+                    "pos": {
+                        "x": 44,
+                        "y": 43,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "e3711fde9aa4c960d4872859",
+                        "name": "Creep546",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 638,
+                        "carryCapacity": 50,
+                        "fatigue": 2,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1829.2682926829268,
+                    "lifetime_trips": 36.58536585365854,
+                    "trip_downtime": 16,
+                    "downtime": 585.3658536585366,
+                    "pos": {
+                        "x": 33,
+                        "y": 32,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "3bba70f33a82e8ad1f9cfc39",
+                        "name": "Creep624",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 716,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 2586.206896551724,
+                    "lifetime_trips": 51.724137931034484,
+                    "trip_downtime": 4,
+                    "downtime": 206.89655172413794,
+                    "pos": {
+                        "x": 26,
+                        "y": 27,
+                        "road_state": "todo"
+                    }
+                }
+            ]
+        },
+        {
+            "self": {
+                "pos": {
+                    "x": 6,
+                    "y": 44,
+                    "roomName": "sim"
+                },
+                "id": "b61da314c5ee9e4ecdaaef0e",
+                "energy": 2952,
+                "energyCapacity": 3000,
+                "ticksToRegeneration": 38
+            },
+            "pos": {
+                "self": {
+                    "pos": {
+                        "x": 6,
+                        "y": 44,
+                        "roomName": "sim"
+                    },
+                    "id": "b61da314c5ee9e4ecdaaef0e",
+                    "energy": 2952,
+                    "energyCapacity": 3000,
+                    "ticksToRegeneration": 38
+                },
+                "x": 6,
+                "y": 44,
+                "road_state": "skip"
+            },
+            "max_containers": 2,
+            "workers": [
+                {
+                    "self": {
+                        "id": "ddc75b2f7149a1e1ce7706d9",
+                        "name": "Creep1381",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 1473,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 974.0259740259739,
+                    "lifetime_trips": 19.48051948051948,
+                    "trip_downtime": 52,
+                    "downtime": 1012.9870129870129,
+                    "pos": {
+                        "x": 5,
+                        "y": 41,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "48ca91b7edd5a5fd031f1142",
+                        "name": "Creep1402",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 1494,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 2142.8571428571427,
+                    "lifetime_trips": 42.857142857142854,
+                    "trip_downtime": 10,
+                    "downtime": 428.57142857142856,
+                    "pos": {
+                        "x": 20,
+                        "y": 29,
+                        "road_state": "todo"
+                    }
+                }
+            ]
+        },
+        {
+            "self": {
+                "pos": {
+                    "x": 35,
+                    "y": 2,
+                    "roomName": "sim"
+                },
+                "id": "b7467b67331a364d79500b22",
+                "energy": 2716,
+                "energyCapacity": 3000,
+                "ticksToRegeneration": 73
+            },
+            "pos": {
+                "self": {
+                    "pos": {
+                        "x": 35,
+                        "y": 2,
+                        "roomName": "sim"
+                    },
+                    "id": "b7467b67331a364d79500b22",
+                    "energy": 2716,
+                    "energyCapacity": 3000,
+                    "ticksToRegeneration": 73
+                },
+                "x": 35,
+                "y": 2,
+                "road_state": "skip"
+            },
+            "max_containers": 2,
+            "workers": [
+                {
+                    "self": {
+                        "id": "f1b8da7b5e54edf73ea28170",
+                        "name": "Creep256",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 348,
+                        "carryCapacity": 50,
+                        "fatigue": 2,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1744.1860465116279,
+                    "lifetime_trips": 34.883720930232556,
+                    "trip_downtime": 18,
+                    "downtime": 627.9069767441861,
+                    "pos": {
+                        "x": 25,
+                        "y": 16,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "9acfd00d8ba88d7282d94842",
+                        "name": "Creep345",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 437,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "carrying": "energy",
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1056.338028169014,
+                    "lifetime_trips": 21.12676056338028,
+                    "trip_downtime": 46,
+                    "downtime": 971.8309859154929,
+                    "pos": {
+                        "x": 34,
+                        "y": 2,
+                        "road_state": "todo"
+                    }
+                },
+                {
+                    "self": {
+                        "id": "965afe2639bd9c58a30bd4df",
+                        "name": "Creep404",
+                        "my": true,
+                        "spawning": false,
+                        "ticksToLive": 496,
+                        "carryCapacity": 50,
+                        "fatigue": 0,
+                        "hits": 300,
+                        "hitsMax": 300
+                    },
+                    "target": {
+                        "max_containers": 2
+                    },
+                    "efficiency": 2,
+                    "load": 50,
+                    "load_time": 25,
+                    "revenue": 1190.4761904761906,
+                    "lifetime_trips": 23.80952380952381,
+                    "trip_downtime": 38,
+                    "downtime": 904.7619047619048,
+                    "pos": {
+                        "x": 37,
+                        "y": 6,
+                        "road_state": "todo"
+                    }
+                }
+            ]
+        }
+    ],
+    "minerals": [],
+    "my_controller": {
+        "id": "94f876d8c4cf851bf7fea2f5",
+        "pos": {
+            "x": 22,
+            "y": 15,
+            "roomName": "sim"
+        },
+        "ticksToDowngrade": 18585,
+        "level": 1,
+        "progress": 0,
+        "progressTotal": 200,
+        "safeModeAvailable": 0,
+        "isPowerEnabled": false,
+        "owner": {
+            "username": "Fadi"
+        },
+        "my": true,
+        "structureType": "controller"
+    },
+    "max_extensions": 0,
+    "list_friendlies": {
+        "all": [
+            {
+                "pos": {
+                    "x": 34,
+                    "y": 21,
+                    "roomName": "sim"
+                },
+                "id": "9bf4df05342150c4214cb434",
+                "name": "Creep1",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 93,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 12
+                },
+                "store": {
+                    "energy": 12
+                },
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "51cb941e25a7d553836749c8"
+                }
+            },
+            {
+                "pos": {
+                    "x": 28,
+                    "y": 27,
+                    "roomName": "sim"
+                },
+                "id": "a1c423a5212da44144d0d1fb",
+                "name": "Creep60",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 152,
+                "carryCapacity": 50,
+                "carry": {},
+                "store": {},
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "51cb941e25a7d553836749c8"
+                }
+            },
+            {
+                "pos": {
+                    "x": 34,
+                    "y": 20,
+                    "roomName": "sim"
+                },
+                "id": "1d0765a36d280849216a974a",
+                "name": "Creep151",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 243,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 48
+                },
+                "store": {
+                    "energy": 48
+                },
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "51cb941e25a7d553836749c8"
+                }
+            },
+            {
+                "pos": {
+                    "x": 30,
+                    "y": 28,
+                    "roomName": "sim"
+                },
+                "id": "84a926e3a4dc85bd41b1b9f0",
+                "name": "Creep207",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 299,
+                "carryCapacity": 50,
+                "carry": {},
+                "store": {},
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "51cb941e25a7d553836749c8"
+                }
+            },
+            {
+                "pos": {
+                    "x": 25,
+                    "y": 16,
+                    "roomName": "sim"
+                },
+                "id": "f1b8da7b5e54edf73ea28170",
+                "name": "Creep256",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 348,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 50
+                },
+                "store": {
+                    "energy": 50
+                },
+                "fatigue": 2,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "b7467b67331a364d79500b22"
+                }
+            },
+            {
+                "pos": {
+                    "x": 35,
+                    "y": 21,
+                    "roomName": "sim"
+                },
+                "id": "a83c4b99143fb471909b04c2",
+                "name": "Creep301",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 393,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 34
+                },
+                "store": {
+                    "energy": 34
+                },
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "51cb941e25a7d553836749c8"
+                }
+            },
+            {
+                "pos": {
+                    "x": 34,
+                    "y": 2,
+                    "roomName": "sim"
+                },
+                "id": "9acfd00d8ba88d7282d94842",
+                "name": "Creep345",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 437,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 34
+                },
+                "store": {
+                    "energy": 34
+                },
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "b7467b67331a364d79500b22"
+                }
+            },
+            {
+                "pos": {
+                    "x": 40,
+                    "y": 43,
+                    "roomName": "sim"
+                },
+                "id": "ac60ac340b3a218309a95c7f",
+                "name": "Creep364",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 456,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 50
+                },
+                "store": {
+                    "energy": 50
+                },
+                "fatigue": 14,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "70d7540eff11b3df720da0de"
+                }
+            },
+            {
+                "pos": {
+                    "x": 37,
+                    "y": 6,
+                    "roomName": "sim"
+                },
+                "id": "965afe2639bd9c58a30bd4df",
+                "name": "Creep404",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 496,
+                "carryCapacity": 50,
+                "carry": {},
+                "store": {},
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "b7467b67331a364d79500b22"
+                }
+            },
+            {
+                "pos": {
+                    "x": 40,
+                    "y": 39,
+                    "roomName": "sim"
+                },
+                "id": "dc77e625285e0ae6b42c1792",
+                "name": "Creep445",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 537,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 50
+                },
+                "store": {
+                    "energy": 50
+                },
+                "fatigue": 2,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "70d7540eff11b3df720da0de"
+                }
+            },
+            {
+                "pos": {
+                    "x": 42,
+                    "y": 43,
+                    "roomName": "sim"
+                },
+                "id": "9787d72659edd8887725d7e9",
+                "name": "Creep468",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 560,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 34
+                },
+                "store": {
+                    "energy": 34
+                },
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "70d7540eff11b3df720da0de"
+                }
+            },
+            {
+                "pos": {
+                    "x": 44,
+                    "y": 43,
+                    "roomName": "sim"
+                },
+                "id": "9a7a7115401c20330113f081",
+                "name": "Creep515",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 607,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 16
+                },
+                "store": {
+                    "energy": 16
+                },
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "70d7540eff11b3df720da0de"
+                }
+            },
+            {
+                "pos": {
+                    "x": 33,
+                    "y": 32,
+                    "roomName": "sim"
+                },
+                "id": "e3711fde9aa4c960d4872859",
+                "name": "Creep546",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 638,
+                "carryCapacity": 50,
+                "carry": {
+                    "energy": 50
+                },
+                "store": {
+                    "energy": 50
+                },
+                "fatigue": 2,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "70d7540eff11b3df720da0de"
+                }
+            },
+            {
+                "pos": {
+                    "x": 26,
+                    "y": 27,
+                    "roomName": "sim"
+                },
+                "id": "3bba70f33a82e8ad1f9cfc39",
+                "name": "Creep624",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 716,
+                "carryCapacity": 50,
+                "carry": {},
+                "store": {},
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "70d7540eff11b3df720da0de"
+                }
+            },
+            {
+                "pos": {
+                    "x": 5,
+                    "y": 41,
+                    "roomName": "sim"
+                },
+                "id": "ddc75b2f7149a1e1ce7706d9",
+                "name": "Creep1381",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 1473,
+                "carryCapacity": 50,
+                "carry": {},
+                "store": {},
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "b61da314c5ee9e4ecdaaef0e"
+                }
+            },
+            {
+                "pos": {
+                    "x": 20,
+                    "y": 29,
+                    "roomName": "sim"
+                },
+                "id": "48ca91b7edd5a5fd031f1142",
+                "name": "Creep1402",
+                "body": [
+                    {
+                        "type": "carry",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "work",
+                        "hits": 100
+                    }
+                ],
+                "my": true,
+                "owner": {
+                    "username": "Fadi"
+                },
+                "spawning": false,
+                "ticksToLive": 1494,
+                "carryCapacity": 50,
+                "carry": {},
+                "store": {},
+                "fatigue": 0,
+                "hits": 300,
+                "hitsMax": 300,
+                "memory": {
+                    "target": "b61da314c5ee9e4ecdaaef0e"
+                }
+            }
+        ],
+        "some": true
+    },
+    "list_hostiles": {
+        "all": [
+            {
+                "pos": {
+                    "x": 5,
+                    "y": 45,
+                    "roomName": "sim"
+                },
+                "id": "7928fb903ab7395024738772",
+                "name": "Keeper223d05b87f8d3b0dc1c77a1b",
+                "body": [
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "tough",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "move",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "attack",
+                        "hits": 100
+                    },
+                    {
+                        "type": "ranged_attack",
+                        "hits": 100
+                    }
+                ],
+                "my": false,
+                "owner": {
+                    "username": "Source Keeper"
+                },
+                "spawning": false,
+                "ticksToLive": 384,
+                "carryCapacity": 0,
+                "carry": {},
+                "store": {},
+                "fatigue": 0,
+                "hits": 5000,
+                "hitsMax": 5000
+            }
+        ],
+        "some": true
+    }
+}
