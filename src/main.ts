@@ -10,18 +10,32 @@ const ROOM_CACHE_LIFETIME = 50000;
 
 const REMOTE_SOURCE_RANGE = 45;
 
+// Per-tick chance an idle hauler dedicates itself to a remote source whose container has banked energy. Keeps them
+// trickling out to remotes instead of the whole idle fleet stampeding the moment a container fills.
+const REMOTE_CLAIM_CHANCE = 0.1;
+
+// Self-renewal: a dying creep heads to a spawn and tops its life back up (only worth it for full-spec creeps).
+const RENEW_MARGIN = 100;    // aim to reach the spawn with ~this many ticks of life to spare
+const RENEW_TARGET = CREEP_LIFE_TIME - 1;   // top the creep back up to this TTL before sending it back to work
+const MAX_RENEW_ETA = 150;   // cheap pre-filter — only run the precise PathFinder renew check this close to death
+
+// Re-send a settler once a room's reservation drops below this (a 2-CLAIM settler tops it back up over its life).
+const RESERVE_FLOOR = 1000;
+
 // How many times the raw production rate the haulers should be able to move before we stop spawning more.
 // Higher = more transporters (the nominal per-hauler throughput is never fully realized in practice).
-const TRANSPORTER_HEADROOM = 5;
+const TRANSPORTER_HEADROOM = 25;
 
 const ROAD_FILL_RADIUS = 5;
 
 interface CreepMemory {
   target?: Id<Source> | Id<Creep>
+  reserve_target?: string // settler: name of the claimable room it claims/reserves
   deliver_target?: Id<ConstructionSite | AnyStructure>
   collect_target?: Id<AnyStructure | Resource>
   delivering?: boolean
   scout?: string
+  renewing?: boolean
   _stuck?: string
 }
 type RoomMemory = Serialized<_Room_> & { timestamp: number }
@@ -35,6 +49,12 @@ interface Memory {
 declare const Memory: Memory;
 
 const ROOM_SIZE = 50;
+
+declare global {}
+
+(global as any).wipe_creep_memory = () => {
+  for (const name in Game.creeps) { Game.creeps[name].memory = undefined; }
+}
 
 export function loop() {
   // Clear dead creeps.
@@ -62,8 +82,6 @@ export function loop() {
     else if (creep.body.some(x => x.type === ATTACK)) new Unit.Infantry(creep).loop();
     else console.error(`Unknown creep type with ${creep.body.map(x => x.type).join(', ')}`)
   }
-
-  Unit.Settler.paintTarget();
 }
 
 namespace Goal {
@@ -90,6 +108,43 @@ namespace Unit {
 
     get room() { return new _Room_(this.self.room) }
     get pos() { return new _Position_(this.self) }
+
+    // Head home to renew before dying — but only creeps built to the current best-affordable WORK count (don't prop up
+    // stunted emergency builds). Aim to reach the spawn with ~RENEW_MARGIN ticks to spare, then top up to RENEW_TARGET.
+    // Returns true if it claimed the creep's action this tick (caller should stop). The `renewing` memory latch lets the
+    // cheap ttl pre-filter skip the PathFinder cost for everyone who isn't actually near death.
+    renew(config: Configuration): boolean {
+      const ttl = this.self.ticksToLive ?? CREEP_LIFE_TIME;
+
+      if (!this.self.memory.renewing) {
+        if (ttl > RENEW_MARGIN + MAX_RENEW_ETA) return false;                // nowhere near death → cheap exit (no PathFinder)
+        const spawn = this.pos.closestSpawn();
+        if (!spawn || !this.worthRenewing(spawn, config)) return false;
+        if (ttl > this.pos.travelTimeTo(spawn) + RENEW_MARGIN) return false; // still time to work AND get back
+        this.self.memory.renewing = true;
+      }
+
+      if (ttl >= RENEW_TARGET) { this.self.memory.renewing = false; return false; } // topped up → back to work
+
+      const spawn = this.pos.closestSpawn();
+      if (!spawn) { this.self.memory.renewing = false; return false; }
+      if (!this.self.pos.isNearTo(spawn)) { this.travel(spawn, { visualizePathStyle: { stroke: '#000000' } }); return true; }
+      const code = spawn.renewCreep(this.self);
+      if (code !== OK && code !== ERR_BUSY) { this.self.memory.renewing = false; return false; } // full / no energy → back to work; only wait out a busy spawn
+      return true;
+    }
+
+    // Only renew creeps with as many WORK parts as a fresh spawn would give them — skips undersized stubs and any
+    // non-working body (scouts/claimers have no WORK). Measured against energyAvailable, the SAME budget the spawner
+    // builds from: comparing against full capacity wrongly rejected every worker spawned while the spawn wasn't full.
+    private worthRenewing(spawn: StructureSpawn, config: Configuration): boolean {
+      if (config[0].includes(CLAIM) || config[1].includes(CLAIM)) return false;
+      const room = new _Room_(spawn.room);
+      const want = room.bestAffordableUnit(config, room.self.energyAvailable);
+      const work = (parts: ({ type: BodyPartConstant } | BodyPartConstant)[]) =>
+        parts.filter(p => ((p as any).type ?? p) === WORK).length;
+      return work(this.self.body) > 0 && work(this.self.body) >= work(want);
+    }
 
     travel(
       target: RoomPosition | { pos: RoomPosition },
@@ -146,9 +201,12 @@ namespace Unit {
 
     get target(): _Source_ | Serialized<_Source_> | undefined {
       if (this.self.memory.target === undefined) {
-        const targets = this.room.needsWorker();
-        if (!targets) return undefined;
-        
+        // Re-acquire from ANY of our rooms that needs a worker (its needsWorker already folds in remote sources) — not
+        // just the room we're standing in. Otherwise a worker whose memory was wiped while in a spawn-less remote room
+        // evaluates that room's needsWorker (always false) and can never find its way back to an assignment.
+        const targets = _Room_.ALL.filter(r => r.my_controller).flatMap(r => r.needsWorker() || []);
+        if (!targets.length) return undefined;
+
         const refs = targets.map(x => ({ id: (x as any).self.id as Id<Source>, pos: roomPosOf((x as any).self.pos) }));
         const best = this.pos.closestByRoute(refs);
         if (!best) return undefined;
@@ -214,7 +272,7 @@ namespace Unit {
     }
     get downtime(): number { return this.lifetime_trips * this.trip_downtime }
 
-    loop(): void { this.gather(); }
+    loop(): void { if (this.renew(Worker.configuration)) return; this.gather(); }
 
     gather(): void {
       // Full, or already committed to a delivery → keep delivering until empty (don't go back to mining mid-load).
@@ -228,7 +286,27 @@ namespace Unit {
       // Source is dry and we're holding a partial load → don't loiter waiting for regen; take it to a delivery target.
       if (source && source.energy === 0 && this.carrying) return this.offload();
       if (source && this.self.harvest(source) === OK) { this.relocate_mining(source); return; }
-      this.travel(roomPosOf(self.pos), { visualizePathStyle: { stroke: '#ffaa00' } });
+      // Travelling to the source (not in harvest range): grab loose energy we pass, and repair as we go. Skip pickups
+      // near the source so a drop-miner doesn't re-collect its own drop pile (that's left there for the haulers).
+      const sourcePos = roomPosOf(self.pos);
+      const nearSource = this.self.pos.roomName === sourcePos.roomName && this.self.pos.getRangeTo(sourcePos) <= 3;
+      const drop = nearSource ? undefined : this.self.pos.findInRange(FIND_DROPPED_RESOURCES, 1, { filter: r => r.resourceType === RESOURCE_ENERGY })[0];
+      if (drop && this.self.store.getFreeCapacity() > 0) this.self.pickup(drop);
+      this.maintain();
+      this.travel(sourcePos, { visualizePathStyle: { stroke: '#ffaa00' } });
+    }
+
+    // Top up the worst-off broken structure within work range — a free work-action (separate intent from MOVE), so a
+    // remote miner mends the road on its trip. Barriers are left to the towers. Returns whether it issued a repair, so
+    // a caller about to transfer/drop its load can stop for the tick (transfer would otherwise drain the repair energy).
+    maintain(): boolean {
+      if ((this.self.store[RESOURCE_ENERGY] ?? 0) === 0) return false; // need a bit of energy to repair with
+      const damaged = this.self.pos.findInRange(FIND_STRUCTURES, 3, {
+        filter: s => s.hits < s.hitsMax && s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART,
+      });
+      if (!damaged.length) return false;
+      const worst = damaged.reduce((a, b) => b.hits / b.hitsMax < a.hits / a.hitsMax ? b : a);
+      return this.self.repair(worst) === OK;
     }
 
     // While mining, if we're standing on a road (a through-lane right by the source), shuffle onto another tile that's
@@ -253,12 +331,19 @@ namespace Unit {
       if (best) this.self.move(here.getDirectionTo(best));
     }
 
-    // Hand off the load: a remote miner with haulers around drops it at the source for them; everyone else delivers.
+    // Hand off the load: a remote miner with haulers around banks it at the source for them; everyone else delivers.
     offload(): void {
       if (this.carrying && !this.room.my_controller && Transporter.count() > 0) {
         this.self.memory.deliver_target = undefined;
-        this.self.drop(this.carrying);
-        return;
+        // Mend our own patch first (container, nearby road) and STOP for the tick if we did — the transfer below would
+        // otherwise drain the very energy the repair needs. We keep the load and resume banking once nothing's broken.
+        if (this.maintain()) return;
+        // Into the source container if one's in reach (no decay, haulers withdraw cleanly); only drop if there's none with room.
+        const container = this.self.pos.findInRange(FIND_STRUCTURES, 1, {
+          filter: s => s.structureType === STRUCTURE_CONTAINER && (s as StructureContainer).store.getFreeCapacity() > 0,
+        })[0] as StructureContainer | undefined;
+
+        if (container) this.self.transfer(container, this.carrying);
       }
       this.deliver();
     }
@@ -270,14 +355,14 @@ namespace Unit {
     }
 
     energyDeliveryTarget(): ConstructionSite | StructureController | StructureSpawn | StructureTower | StructureExtension | StructureContainer | null {
+      const fill = this.fillable();
+
       // With haulers around, just drop the load into the nearest container (the source container we're standing
       // by) and let the transporters distribute it — don't ferry it across the room ourselves.
       if (!(this instanceof Transporter) && Transporter.count() > 0) {
-        const fill = this.fillable(); // closest fillable (container / spawn / extension / tower), not just a container
         if (fill) return fill;
       }
 
-      const fill = this.fillable();
       if (fill && (this.room.needsWorker() || (this.room.needsTransporter() && Transporter.count() < this.room.sources.length))) return fill;
 
       const build = this.room.construction_goal;
@@ -290,11 +375,13 @@ namespace Unit {
     fillable(): StructureSpawn | StructureTower | StructureExtension | StructureContainer | null {
       // Closest fillable by REAL in-room path. closestByRoute runs a terrain-only PathFinder that walks straight
       // through buildings, so it can rank a far container ahead of a near sink. findClosestByPath respects them.
+      const reserveForSpawn = this.self.room.energyAvailable < this.self.room.energyCapacityAvailable; // still filling spawn/extensions → skip towers
       const candidates = this.self.room.find(FIND_STRUCTURES, {
         filter: s => (
           s.structureType === STRUCTURE_CONTAINER ||
           (([STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER] as string[]).includes(s.structureType) && (s as OwnedStructure).my)
-        ) && (((s as any).store?.getFreeCapacity(RESOURCE_ENERGY) ?? 0) > 0),
+        ) && !(reserveForSpawn && s.structureType === STRUCTURE_TOWER)
+          && (((s as any).store?.getFreeCapacity(RESOURCE_ENERGY) ?? 0) > 0),
       }) as (StructureSpawn | StructureExtension | StructureTower | StructureContainer)[];
       return this.self.pos.findClosestByPath(candidates, { ignoreCreeps: true }) ?? this.pos.closestFillable();
     }
@@ -314,7 +401,10 @@ namespace Unit {
         : target instanceof StructureController ? this.self.upgradeController(target)
         : this.self.transfer(target, this.carrying);
 
-      if (code === ERR_NOT_IN_RANGE) return void this.travel(target, { visualizePathStyle: { stroke: target instanceof ConstructionSite ? '#0000FF' : target instanceof StructureController ? '#00FF00' : '#ffffff' } });
+      if (code === ERR_NOT_IN_RANGE) {
+        if (!(this instanceof Transporter)) this.maintain(); // workers mend the road on the loaded trip home (transporters do it in their loop)
+        return void this.travel(target, { visualizePathStyle: { stroke: target instanceof ConstructionSite ? '#0000FF' : target instanceof StructureController ? '#00FF00' : '#ffffff' } });
+      }
       if (code !== OK) this.self.memory.deliver_target = undefined; // full / can't deliver here (e.g. no WORK) → re-pick next tick
 
       // In range and carrying energy → top up the structure we're feeding if it's worn. This is how a source
@@ -343,19 +433,8 @@ namespace Unit {
       return [drop_move(base), drop_move(repeated)];
     }
 
-    loop(): void { this.maintain(); this.gather(); }
+    loop(): void { if (this.renew(Transporter.configuration)) return; this.maintain(); this.gather(); }
 
-    // Default behaviour: as we pass, top up the worst-off broken structure within work range — one work-action,
-    // a separate intent from MOVE so it's free during the haul. Barriers only up to the defensive target.
-    maintain(): void {
-      if ((this.self.store[RESOURCE_ENERGY] ?? 0) === 0) return; // need a bit of our load to repair with
-      const damaged = this.self.pos.findInRange(FIND_STRUCTURES, 3, {
-        filter: s => s.hits < s.hitsMax && s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART, // barriers are the tower's job
-      });
-      if (!damaged.length) return;
-      const worst = damaged.reduce((a, b) => b.hits / b.hitsMax < a.hits / a.hitsMax ? b : a); // worst-off first
-      this.self.repair(worst);
-    }
 
     gather(): void {
       // Latch into deliver mode when full and stay there until empty — drop off the whole load before collecting
@@ -394,8 +473,8 @@ namespace Unit {
           if (code === ERR_NOT_IN_RANGE) this.travel(drop, { visualizePathStyle: { stroke: '#ffaa00' } });
           return;
         }
-        // Nothing dropped: wait if a miner is still working it, otherwise the source is abandoned → release.
-        if (!Object.values(Game.creeps).some(c => c.memory.target === this.self.memory.target && c.body.some(p => p.type === WORK) && c.body.filter(p => p.type === CARRY).length < 2)) {
+        // Nothing dropped: wait if a miner (other than us) is still working it, otherwise the source is abandoned → release.
+        if (!Object.values(Game.creeps).some(c => c.id !== this.self.id && c.memory.target === this.self.memory.target && c.body.some(p => p.type === WORK) && c.body.filter(p => p.type === CARRY).length < 2)) {
           this.self.memory.target = undefined;
           return this.gather();
         }
@@ -411,14 +490,26 @@ namespace Unit {
       return cached ? roomPosOf((cached as any).self.pos) : undefined;
     }
 
-    // Claim a remote source that's being mined (so drops are coming) but has no transporter dedicated to it yet.
+    // Maybe dedicate to a logged remote source that has energy banked in its container. Probabilistic (REMOTE_CLAIM_CHANCE)
+    // so idle haulers trickle out instead of stampeding, and never doubles up on a source another hauler already holds.
     claim_remote(): boolean {
       const isT = (c: Creep) => c.body.filter(p => p.type === CARRY).length >= 2;
+      if (!isT(this.self)) return false;        // real haulers only — a moonlighting 1-CARRY miner must stay put
+      if (Math.random() > REMOTE_CLAIM_CHANCE) return false;
+
       const hauled = new Set(Object.values(Game.creeps).filter(isT).map(c => c.memory.target).filter(Boolean));
-      const mined = new Set(Object.values(Game.creeps).filter(c => !isT(c) && c.body.some(p => p.type === WORK)).map(c => c.memory.target).filter(Boolean));
-      const sources = [..._Room_.REMOTE.flatMap(r => r.sources as any[]), ..._Room_.ALL.filter(r => !r.my_controller).flatMap(r => r.sources as any[])]
-        .filter(s => mined.has(s.self.id) && !hauled.has(s.self.id));
-      const best = this.pos.closestByRoute(sources.map(s => ({ id: s.self.id as Id<Source>, pos: roomPosOf(s.self.pos) })));
+
+      // Energy sitting in the source's container right now — needs vision (a remote miner there gives us that).
+      const stored = (id: Id<Source>): number => {
+        const src = Game.getObjectById(id);
+        if (!(src instanceof Source)) return 0;
+        const container = src.pos.findInRange(FIND_STRUCTURES, 2, { filter: s => s.structureType === STRUCTURE_CONTAINER })[0] as StructureContainer | undefined;
+        return container?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      };
+
+      const sources = _Room_.ALL.flatMap(r => r.spawners).flatMap(s => s.close_remote_sources())
+        .filter(s => !hauled.has((s as any).self.id) && stored((s as any).self.id) > 0);
+      const best = this.pos.closestByRoute(sources.map(s => ({ id: (s as any).self.id as Id<Source>, pos: roomPosOf((s as any).self.pos) })));
       if (!best) return false;
       this.self.memory.target = best.id;
       return true;
@@ -484,16 +575,88 @@ namespace Unit {
     }
   }
   export class Settler extends Obj {
-    static canSettle() { return _Room_.ALL.filter(x => x.my_controller).length >= Game.gcl.level; }
+    // We may claim another room only while we own fewer than GCL allows; at the cap we can still reserve.
+    static canSettle() { return _Room_.ALL.filter(x => x.my_controller).length < Game.gcl.level; }
     static roomScore(d: _Room_ | Serialized<_Room_>) { return d.sources.length; } //TODO Empty spaces next too.
 
-    // Best unowned, claimable, scouted room — or undefined if GCL is maxed / nothing worth it.
+    static get username(): string | undefined { return Object.values(Game.spawns)[0]?.owner?.username; }
+
+    // Rooms we've logged a remote source in (a spawn's close_remote_sources). Committing to a source is enough — we
+    // reserve/claim its room regardless of whether a miner or hauler is currently assigned. Owned rooms are excluded
+    // (our own sources aren't remote reserve targets).
+    static remoteSourceRoomNames(): Set<string> {
+      const names = new Set<string>();
+      for (const room of _Room_.ALL)
+        for (const spawn of room.spawners)
+          for (const src of spawn.close_remote_sources()) {
+            const name = (src as any).self?.pos?.roomName;
+            if (name && !Game.rooms[name]?.controller?.my) names.add(name);
+          }
+      return names;
+    }
+
+    // Targets a settler should work, in priority order: the remote rooms we actually mine (reserved to double their
+    // output), plus — only while we have GCL headroom to claim it — the single best expansion room. Restricting to
+    // mined rooms means we never reserve somewhere we aren't harvesting.
+    static priorityTargets(): string[] {
+      const status = _Room_.ALL.find(x => x.my_controller)?.status;
+      const claimable = _Room_.CLAIMABLE;
+      const mined = Settler.remoteSourceRoomNames();
+      // Logged remote-source rooms: we're already operating there → reachable by definition, so don't status-gate them.
+      const names = claimable.filter(r => mined.has(r.self.name))
+        .sort((a, b) => Settler.roomScore(b) - Settler.roomScore(a)).map(r => r.self.name);
+      if (Settler.canSettle()) { // only chase an expansion target when we can actually claim it (else we'd just reserve it)
+        const settle = Settler.freeSettleTarget()?.self.name;
+        if (settle && claimable.some(r => r.self.name === settle && r.status === status) && !names.includes(settle)) names.push(settle);
+      }
+      return names;
+    }
+
+    // A target needs (re)reserving if we have no live reservation of ours above the floor (or none at all).
+    static needsReservation(name: string): boolean {
+      const ctrl = Game.rooms[name]?.controller;
+      if (!ctrl) return true; // no vision → assume it needs us (a settler will get vision on arrival)
+      const r = ctrl.reservation;
+      return !r || r.username !== Settler.username || r.ticksToEnd < RESERVE_FLOOR;
+    }
+
+    static get settlers(): Creep[] { return Object.values(Game.creeps).filter(c => c.body.some(p => p.type === CLAIM)); }
+
+    // Spawn a settler only when uncovered rooms outnumber settlers not yet committed to one. Counting unassigned
+    // settlers (a freshly-spawned one hasn't run its loop to pick a target yet) stops us spawning a second body into
+    // the same room before the first has claimed it in memory.
+    static wanted(): boolean {
+      const settlers = Settler.settlers;
+      const covered = new Set(settlers.map(c => c.memory.reserve_target).filter(Boolean));
+      const uncovered = Settler.priorityTargets().filter(name => !covered.has(name) && Settler.needsReservation(name)).length;
+      const uncommitted = settlers.filter(c => !c.memory.reserve_target).length;
+      return uncovered > uncommitted;
+    }
+
+    // Pick (and remember) a claimable room for this settler — sticky while valid, and never a room another settler
+    // already holds, so two settlers don't pile onto the same controller.
+    static targetFor(creep: Creep): string | undefined {
+      const targets = Settler.priorityTargets();
+      const current = creep.memory.reserve_target;
+      if (current && targets.includes(current)) return current;
+      const taken = new Set(Settler.settlers.filter(c => c.name !== creep.name).map(c => c.memory.reserve_target));
+      const pick = targets.find(name => !taken.has(name) && Settler.needsReservation(name))
+        ?? targets.find(name => !taken.has(name))
+        ?? targets[0];
+      return creep.memory.reserve_target = pick;
+    }
+
+    // Best unowned, claimable, scouted room to CLAIM (expand into) — or undefined if GCL is maxed / nothing worth it.
     static freeSettleTarget(): _Room_ | Serialized<_Room_> | undefined {
       let best: _Room_ | Serialized<_Room_> | undefined, bestScore = 0;
+      const mined = Settler.remoteSourceRoomNames();
 
       for (const room of _Room_.NON_OWNED) {
-        if (!room.self.controller || room.self.controller.owner || room.self.controller.reservation) continue;
+        const reservation = room.self.controller?.reservation;
+        // Skip foreign-held controllers, but a room WE merely reserve is still a valid place to settle into.
+        if (!room.self.controller || room.self.controller.owner || (reservation && reservation.username !== Settler.username)) continue;
         if (room.status === 'closed') continue;
+        if (mined.has(room.self.name)) continue; // rooms we mine are RESERVE targets, never claim targets
         const s = Settler.roomScore(room);
         if (s > bestScore) { bestScore = s; best = room; }
       }
@@ -573,21 +736,37 @@ namespace Unit {
       const target = Settler.freeSettleTarget();
       if (!target) return;
 
-
       _Room_.NON_OWNED.forEach(target => {
         const spawn = Settler.bestSpawnPos(target);
         if (!spawn) return;
 
         new RoomVisual(spawn.roomName).circle(spawn.x, spawn.y, {fill: '#CC00CC', stroke: '#ffffff', radius: 0.5});
       })
-
     }
 
     // TODO Dont move into the room if there's a tower still.
     static configuration: Configuration = [[MOVE, CLAIM], [MOVE, CLAIM]]
-    
+
     loop(): void {
-      
+      const targetName = Settler.targetFor(this.self);
+      if (!targetName) return; // nothing claimable to work
+
+      const controller = Game.rooms[targetName]?.controller;
+      // No vision yet, or not adjacent → travel into the room toward its controller (centre as a fallback heading).
+      if (!controller || !this.self.pos.inRangeTo(controller, 1))
+        return void this.travel(controller ?? new RoomPosition(ROOM_SIZE / 2, ROOM_SIZE / 2, targetName), { visualizePathStyle: { stroke: '#cc00cc' } });
+
+      // Reserve by default — that's the steady state for remote-mining rooms and keeps others denied to enemies.
+      // Claim ONLY this room if it's the chosen settle target (best expansion room) AND we have GCL headroom AND
+      // nobody else holds the controller. Every other room just gets reserved.
+      if (Settler.freeSettleTarget()?.self.name === targetName
+        && Settler.canSettle() && !controller.owner && (!controller.reservation || controller.reservation.username === Settler.username)) {
+        const code = this.self.claimController(controller);
+        if (code === ERR_GCL_NOT_ENOUGH || code === ERR_INVALID_TARGET) this.self.reserveController(controller);
+        return;
+      }
+      const code = this.self.reserveController(controller);
+      if (code === ERR_INVALID_TARGET) this.self.attackController(controller); // reserved/owned by an enemy → tear it down
     }
   }
 
@@ -705,6 +884,7 @@ class _Room_ {
   static ALL: _Room_[] = []
   static REMOTE: Serialized<_Room_>[] = []
   static get NON_OWNED(): (_Room_ | Serialized<_Room_>)[] { return [...this.ALL.filter(x => !x.my_controller), ..._Room_.REMOTE] } 
+  static get CLAIMABLE() { return this.NON_OWNED.filter(x => x.self.controller && !x.self.controller.owner) }
 
   static remote_loop(room: Serialized<_Room_> & { timestamp: number }) {
     if (Game.time - room.timestamp >= ROOM_CACHE_LIFETIME) {
@@ -906,9 +1086,8 @@ class _Room_ {
     if (!spawn) return false;
 
     const containers = this.self.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_CONTAINER });
-    const production = this.sources
-      .filter(s => containers.some(c => c.pos.inRangeTo(s.self, 3)))
-      .reduce((sum, s) => sum + s.self.energyCapacity, 0)
+    const producers = this.sources.filter(s => containers.some(c => c.pos.inRangeTo(s.self, 3)));
+    const production = producers.reduce((sum, s) => sum + s.self.energyCapacity, 0)
       + spawn.close_remote_sources().reduce((sum, s) => sum + (s as any).self.energyCapacity, 0);
     if (production === 0) return false;
 
@@ -922,13 +1101,20 @@ class _Room_ {
       room: this.self,
     } as unknown as Creep);
 
-    const trip = candidate.trip_downtime;
-    if (trip === Infinity) return false; // nothing on the ground to haul right now → don't over-spawn
+    // Measure the haul from a PRODUCING source-container — NOT from the spawn. The candidate stands on the spawn, so
+    // trip_downtime's closestCollectable() picked whatever loose energy was nearest the spawn, already beside a sink →
+    // travelTimeTo (range 1) returns 0 → throughput looks infinite → we never spawn a hauler. Instead measure the real
+    // distance from a container to where the load lands: an open sink, or the controller when everything's topped off
+    // (a long, slow upgrade haul — exactly when we want MORE haulers moving the surplus).
+    const sourceContainers = containers.filter(c => producers.some(s => c.pos.inRangeTo(s.self, 1)));
+    const from = new _Position_((sourceContainers[0] ?? producers[0]?.self ?? spawn.self) as RoomObject);
+    const dest = from.closestFillable({ ignore_capacity: false }) ?? this.my_controller;
+    if (!dest) return false;
+    const trip = from.travelTimeTo(dest) * 2;
+    if (trip === Infinity) return false; // unreachable → don't over-spawn
+
     const perHauler = candidate.load / (candidate.load_time + trip) * ENERGY_REGEN_TIME;
-    const count = this.self.find(FIND_MY_CREEPS).filter(c => c.body.filter(p => p.type === CARRY).length >= 2).length;
-    // Lenient headroom: provision well above the raw production rate (trips, congestion and regen gaps mean nominal
-    // capacity is never realized), so keep spawning until the fleet can move several times the deposit per cycle.
-    return count * perHauler < production * TRANSPORTER_HEADROOM;
+    return this.transporters.length * perHauler < production * TRANSPORTER_HEADROOM;
   }
   get transporters() {
     return this.self.find(FIND_MY_CREEPS).filter(x => x.body.filter(p => p.type === CARRY).length >= 2).map(x => new Unit.Transporter(x));
@@ -950,6 +1136,10 @@ class _Room_ {
   needsRoad(): false | Structures.Road[] {
     const roads = this.spawners.flatMap(x => [x.road_to_controller, x.road_to_extensions, ...x.road_to_exits]).filter(x => !x.completed);
     return roads.length === 0 ? false : roads;
+  }
+
+  needsSettler() {
+    return _Room_.CLAIMABLE.length !== 0;
   }
 
 }
@@ -978,15 +1168,14 @@ class _Source_ {
 
     const trip = candidate.trip_downtime;
     if (trip === Infinity) return false;
-    const revenue = CREEP_LIFE_TIME / (candidate.load_time + trip) * candidate.load;
-    if (revenue <= 0) return false;
+    if (candidate.revenue <= 0) return false;
 
-    const n = Object.values(Game.creeps).filter(c => c.memory.target === this.self.id).length;
-    if (n * revenue / CREEP_LIFE_TIME * ENERGY_REGEN_TIME >= this.self.energyCapacity) return false;
+    const n = this.workers;
+    if (n.reduce((a, x) => a + x.revenue, 0) / CREEP_LIFE_TIME * ENERGY_REGEN_TIME >= this.self.energyCapacity) return false;
 
-    const spacesUsed = n * candidate.load_time / (candidate.load_time + trip);
+    const spacesUsed = n.length * candidate.load_time / (candidate.load_time + trip);
     const freeBySpace = Math.max(0, 1 - spacesUsed / this.pos.adjacentSpaces());
-    return revenue * freeBySpace > Unit.cost(body);
+    return candidate.revenue * freeBySpace > Unit.cost(body);
   }
 
   get workers() {
@@ -1053,11 +1242,15 @@ class _Position_ {
   closestFillable(opts: { ignore_capacity: boolean } = { ignore_capacity: false }, include: StructureConstant[] = [STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER, STRUCTURE_CONTAINER]): StructureSpawn | StructureExtension | StructureTower | StructureContainer | null {
     // Across ALL visible rooms (so a remote miner can deliver to a home sink), pick the closest by route.
     // Only OUR spawn/extension/tower (never a hostile one); containers are unowned so any is fair game.
-    const candidates = _Room_.ALL.flatMap(r => r.self.find(FIND_STRUCTURES, {
-      filter: s => include.includes(s.structureType)
-        && (s.structureType === STRUCTURE_CONTAINER || (s as OwnedStructure).my)
-        && (opts.ignore_capacity || ('store' in s && (s.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0) > 0)),
-    })) as (StructureSpawn | StructureExtension | StructureTower | StructureContainer)[];
+    const candidates = _Room_.ALL.flatMap(r => {
+      const reserveForSpawn = r.my_controller && r.self.energyAvailable < r.self.energyCapacityAvailable; // still filling spawn/extensions → don't load towers yet
+      return r.self.find(FIND_STRUCTURES, {
+        filter: s => include.includes(s.structureType)
+          && (s.structureType === STRUCTURE_CONTAINER || (s as OwnedStructure).my)
+          && !(reserveForSpawn && s.structureType === STRUCTURE_TOWER)
+          && (opts.ignore_capacity || ('store' in s && (s.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0) > 0)),
+      });
+    }) as (StructureSpawn | StructureExtension | StructureTower | StructureContainer)[];
     return this.closestByRoute(candidates) ?? null;
   }
   closestCollectable(include: StructureConstant[] = [STRUCTURE_CONTAINER]): StructureSpawn | StructureExtension | StructureTower | StructureContainer | Resource | null {
@@ -1134,32 +1327,45 @@ namespace Structures {
     }
 
     loop(): void {
+      console.log(this.room.needsTransporter())
       // TODO IF IN WAR
       if (this.self.spawning) return; // busy → skip all the spawn-decision work (needsWorker/needsTransporter/road scans)
 
-      // Emergency: no worker mining THIS room (remote miners don't refill our spawn) → the local economy is dead and
-      // the spawn won't refill on its own, so spawn the best worker we can afford with the energy on hand *now*.
+      // Workers are the lifeblood. Whenever one is needed (or none mine THIS room — remote miners don't refill our
+      // spawn), revert everything to replacing them: spawn the best we can afford from energy ON HAND right now —
+      // never wait for full capacity, or they die off faster than we replace them — and let nothing else spawn until
+      // it's handled. energyAvailable == capacity when the spawn's full, so healthy-economy workers stay full size.
       const localSources = new Set(this.room.sources.map(s => s.self.id));
       const localWorkers = Object.values(Game.creeps).filter(c =>
         c.body.some(p => p.type === WORK) && c.body.filter(p => p.type === CARRY).length < 2 && localSources.has(c.memory.target as Id<Source>)).length;
-      if (localWorkers === 0) {
+      if (localWorkers === 0 || this.room.needsWorker()) {
         const body = this.room.bestAffordableUnit(Unit.Worker.configuration, this.self.room.energyAvailable);
-        if (body.includes(WORK)) this.spawnCreep(body); // else not enough yet → wait, don't spawn a useless CARRY-only creep
+        if (body.includes(WORK)) this.spawnCreep(body); // below a functional worker → wait, don't waste energy on a stub
         return;
       }
 
-      if (this.room.needsWorker()) this.spawnCreep(this.room.bestAffordableUnit(Unit.Worker.configuration));
-      else if (this.room.needsTransporter()) this.spawnCreep(this.room.bestAffordableUnit(Unit.Transporter.roaded_configuration(this.room)));
-      else if (Unit.Scout.count() === 0) this.spawnCreep(this.room.bestAffordableUnit(Unit.Scout.configuration));
+      if (this.room.needsTransporter()) return void this.spawnCreep(this.room.bestAffordableUnit(Unit.Transporter.roaded_configuration(this.room)));
+
+      // Settlers: reserve (and, with GCL headroom, claim) our claimable rooms — remote-mined ones first.
+      if (Unit.Settler.wanted()) {
+        const body = this.room.bestAffordableUnit(Unit.Settler.configuration);
+        if (body.includes(CLAIM)) return void this.spawnCreep(body); // below a 1-CLAIM settler → wait, don't waste energy
+      }
+
+      if (Unit.Scout.count() === 0) this.spawnCreep(this.room.bestAffordableUnit(Unit.Scout.configuration));
     }
 
     // Every source in the scouted, not-currently-visible remote rooms we've cached this tick.
     close_remote_sources(): (Serialized<_Source_> | _Source_)[] {
       // Memoized per tick — two PathFinder calls per remote source, and it's read from needsWorker/needsTransporter.
+      const home = this.self.room.name;
       return memo('close_remote_sources:' + this.self.id, () => [
         ..._Room_.REMOTE.flatMap(room => room.sources),
         ..._Room_.ALL.filter(x => !x.my_controller).flatMap(room => room.sources)
-      ].filter(x => this.pos.travelTimeTo(x.pos.self as RoomObject) <= REMOTE_SOURCE_RANGE)
+      ] // cheap room-distance gate first: a source within REMOTE_SOURCE_RANGE tiles is at most ~1 room away — skips a
+        // PathFinder per source for every far-off scouted room (_Room_.REMOTE holds everything we've ever cached).
+       .filter(x => Game.map.getRoomLinearDistance(home, (x as any).pos.self.pos.roomName) <= 1)
+       .filter(x => this.pos.travelTimeTo(x.pos.self as RoomObject) <= REMOTE_SOURCE_RANGE)
        .filter(x => new _Position_(x.pos.self as RoomObject).closestSpawn()?.id === this.self.id));
     }
 
